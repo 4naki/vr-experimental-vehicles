@@ -1,0 +1,217 @@
+@name VR Helicopter Base
+@inputs [Base Seat Rotor TailRotor]:entity [W1 W2 W3]:entity
+@outputs Throttle JoyX JoyY Power RPM Val FirePrimary FireSecondary SetAng:angle
+@persist Throttle Active FreeLook [RotorPos TailRotorPos]:vector Power Val
+
+interval(50)
+if(first()){
+    
+    #[
+    The base plate must be facing backwards for now.
+    ]#
+    
+    RotorPos=vec(-20,0,68)
+    TailRotorPos=vec(245,-15,85)
+    
+    holoCreate(1,Rotor:toWorld(vec(0,0,0)),vec(0),Rotor:toWorld(ang(0,0,0)),vec(255),"cube")
+    local Children=Rotor:children()
+    rangerFilter(Children)
+    Rotor:parentTo(holoEntity(1))
+    holoPos(1,Base:toWorld(RotorPos))
+    holoAng(1,Base:toWorld(ang(0,0,0)))
+    holoParent(1,Base)
+    for(I=1,Children:count()){
+        Children[I,entity]:parentTo(Rotor)
+    }
+    
+    holoCreate(2,TailRotor:toWorld(vec(0,0,0)),vec(0),TailRotor:toWorld(ang(0,0,0)),vec(255),"cube")
+    local Children=TailRotor:children()
+    rangerFilter(Children)
+    TailRotor:parentTo(holoEntity(2))
+    holoPos(2,Base:toWorld(TailRotorPos))
+    holoAng(2,Base:toWorld(ang(0,0,0)))
+    holoParent(2,Base)
+    for(I=2,Children:count()){
+        Children[I,entity]:parentTo(TailRotor)
+    }
+    
+    holoCreate(3)
+    holoPos(3,Base:toWorld(vec(-85,0,35)))
+    holoAng(3,Base:angles())
+    holoParent(3,Base)
+    holoAlpha(3,0)
+    holoScale(3,vec(0.5))
+    
+    holoCreate(4)
+    holoPos(4,Base:toWorld(vec(-85,0,45)))
+    holoAng(4,Base:angles())
+    holoParent(4,Base)
+    holoAlpha(4,0)
+    holoScale(4,vec(0.5))
+}
+Pilot=Seat:driver()
+
+if(changed(Pilot)){
+    if(Pilot){
+        if(vrPlayerInVR(Pilot)){
+            vrSetPlayer(Pilot)
+            Active=1
+        }else{
+            Active=0
+            Seat:hintDriver("This vehicle is VR only!",1000)
+        }
+    }else{
+        vrSetPlayer(noentity())
+        vrStopRequesting()
+        Active=0
+    }
+}
+
+OutputZ=((vrMovement():y()/100)*100)*Active
+OutputX=(vrRightHandAng()):pitch()*Active*!FreeLook
+OutputY=(vrRightHandAng()):roll()*Active*!FreeLook
+FirePrimary=vrForward()*Active
+FireSecondary=vrReverse()*Active
+if(Active){
+    SetAng=Seat:driver():eyeAngles()
+}else{
+    SetAng=Base:toWorld(ang(0,180,0))
+}
+if(changed(vrHandbrake())&vrHandbrake()){
+FreeLook=!FreeLook
+}
+if(changed(vrTurbo())&vrTurbo()){
+Power=!Power
+}
+if(abs(OutputX)>2){
+    if(OutputX<45){
+        if(OutputX>-45){
+            JoyX=OutputX
+        }else{
+            JoyX=-45
+        }
+    }else{
+        JoyX=45
+    }
+}else{
+    JoyX=0
+}
+if(abs(OutputY)>2){
+    if(OutputY<45){
+        if(OutputY>-45){
+            JoyY=OutputY
+        }else{
+            JoyY=-45
+        }
+    }else{
+        JoyY=45
+    }
+}else{
+    JoyY=0
+}
+if(FreeLook){
+    JoyX=25
+}
+
+if(abs(OutputZ)>0.1){
+    JoyZ=OutputZ
+}else{
+    JoyZ=0
+}
+if(JoyZ>0){
+if(Throttle<100){
+    Throttle+=abs(JoyZ)/1
+}
+}
+if(JoyZ<0){
+if(Throttle>0){
+    Throttle-=abs(JoyZ)/1
+}
+}
+if(Throttle>100){
+    Throttle=100
+}
+if(Throttle<0){
+    Throttle=0
+}
+if(vrRightGrab()){
+    Yaw=15
+}elseif(vrLeftGrab()){
+    Yaw=-15
+}else{
+    Yaw=0
+}
+Ang=(((-ang(Base:angles():pitch(),0,Base:angles():roll()))*0.5)-(ang(-35+JoyX,Yaw,JoyY)))*75
+Vel=(Base:velL()/5)*!FreeLook
+if(Vel:x()<45){
+    if(Vel:x()>-45){
+        BaseX=Vel:x()
+    }else{
+        BaseX=-45
+    }
+}else{
+    BaseX=45
+}
+if(Vel:y()<45){
+    if(Vel:y()>-45){
+        BaseY=Vel:y()
+    }else{
+        BaseY=-45
+    }
+}else{
+    BaseY=45
+}
+holoAng(3,Base:toWorld((ang(BaseX,0,-BaseY)*0.45)+(ang(-JoyX-(35*FreeLook),0,-JoyY)*1.8)))
+holoAng(4,Base:toWorld((ang(-JoyX-(15*FreeLook),0,-JoyY)*0.08)))
+
+Base:applyForce((Base:up()*Base:mass()*Throttle)*Power)
+Base:applyAngForce((Ang-(Base:angVel()*25))*(Power*(Base:mass()/24)))
+
+if(dupefinished()){
+    reset()
+}
+if(changed(Power)){
+    if(Power){
+        Base:soundPlay("rotor",0,"npc/attack_helicopter/aheli_rotor_loop1.wav")
+        Base:soundPlay("wind",0,"npc/attack_helicopter/aheli_wash_loop3.wav")
+    }else{
+        
+    }
+}
+soundPitch("rotor",15+(RPM/500)*90)
+soundVolume("rotor",-0.1+RPM/500)
+soundVolume("wind",(RPM/500)*0.2)
+if(Power){
+    if(RPM<412){
+        RPM+=(100+randint(-2,2))/20
+    }
+    if(RPM<562){
+        RPM+=Throttle/150
+    }
+}else{
+    if(RPM>0){
+        RPM-=4
+    }
+    if(RPM<0){
+        RPM=0
+    }
+}
+Val+=RPM/4
+holoAng(1,holoEntity(4):toWorld(ang(0,Val,0)))
+holoAng(2,Base:toWorld(ang(Val/1.5,0,0)))
+
+if(Throttle>10){
+    if(RPM>300){
+        foreach(I,E:entity=array(W1,W2,W3)){
+            E:setMass(0)
+        }
+    }else{
+       foreach(I,E:entity=array(W1,W2,W3)){
+            E:setMass(15)
+        }
+    }
+}else{
+    foreach(I,E:entity=array(W1,W2,W3)){
+        E:setMass(15)
+    }
+}
