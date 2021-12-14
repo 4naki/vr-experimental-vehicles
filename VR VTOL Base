@@ -1,0 +1,218 @@
+@name VR VTOL Base
+@inputs [Base Seat Rotor TailRotor]:entity [W1 W2 W3]:entity
+@outputs Throttle JoyX JoyY Power RPM Val FirePrimary FireSecondary SetAng:angle
+@persist Throttle Active Mode [RotorPos]:vector Power Val Val2
+
+interval(50)
+if(first()){
+    
+    #[
+    The base plate must be facing backwards for now.
+    ]#
+    
+    
+    RotorPos=vec(-20,0,25)
+    
+    holoCreate(1,Rotor:toWorld(vec(0,0,0)),vec(0),Rotor:toWorld(ang(0,0,0)),vec(255),"cube")
+    local Children=Rotor:children()
+    rangerFilter(Children)
+    Rotor:parentTo(holoEntity(1))
+    holoPos(1,Base:toWorld(RotorPos))
+    holoAng(1,Base:toWorld(ang(0,0,0)))
+    holoParent(1,Base)
+    for(I=1,Children:count()){
+        Children[I,entity]:parentTo(Rotor)
+    }
+    
+    holoCreate(2)
+    holoPos(2,Base:toWorld(vec(-85,0,35)))
+    holoAng(2,Base:angles())
+    holoParent(2,Base)
+    holoAlpha(2,0)
+    holoScale(2,vec(0.5))
+    
+    holoCreate(3)
+    holoPos(3,Base:toWorld(vec(-85,0,45)))
+    holoAng(3,Base:angles())
+    holoParent(3,Base)
+    holoAlpha(3,0)
+    holoScale(3,vec(0.5))
+}
+Pilot=Seat:driver()
+
+if(changed(Pilot)){
+    if(Pilot){
+        if(vrPlayerInVR(Pilot)){
+            vrSetPlayer(Pilot)
+            Active=1
+        }else{
+            Active=0
+            Seat:hintDriver("This vehicle is VR only!",1000)
+        }
+    }else{
+        vrSetPlayer(noentity())
+        vrStopRequesting()
+        Active=0
+    }
+}
+
+OutputZ=((vrMovement():y()/100)*100)*Active
+OutputX=(vrRightHandAng()):pitch()*Active
+OutputY=(vrRightHandAng()):roll()*Active
+FirePrimary=vrForward()*Active
+FireSecondary=vrReverse()*Active
+if(Active){
+    SetAng=Seat:driver():eyeAngles()
+}else{
+    SetAng=Base:toWorld(ang(0,180,0))
+}
+if(changed(vrHandbrake())&vrHandbrake()){
+Mode=!Mode
+}
+if(changed(vrTurbo())&vrTurbo()){
+Power=!Power
+}
+if(abs(OutputX)>2){
+    if(OutputX<45){
+        if(OutputX>-45){
+            JoyX=OutputX
+        }else{
+            JoyX=-45
+        }
+    }else{
+        JoyX=45
+    }
+}else{
+    JoyX=0
+}
+if(abs(OutputY)>2){
+    if(OutputY<45){
+        if(OutputY>-45){
+            JoyY=OutputY
+        }else{
+            JoyY=-45
+        }
+    }else{
+        JoyY=45
+    }
+}else{
+    JoyY=0
+}
+if(Mode){
+    #JoyX=0
+}
+
+if(abs(OutputZ)>0.1){
+    JoyZ=OutputZ
+}else{
+    JoyZ=0
+}
+if(JoyZ>0){
+if(Throttle<100){
+    Throttle+=abs(JoyZ)/1
+}
+}
+if(JoyZ<0){
+if(Throttle>0){
+    Throttle-=abs(JoyZ)/1
+}
+}
+if(Throttle>100){
+    Throttle=100
+}
+if(Throttle<0){
+    Throttle=0
+}
+if(vrRightGrab()){
+    Yaw=25
+}elseif(vrLeftGrab()){
+    Yaw=-25
+}else{
+    Yaw=0
+}
+Ang=(((-ang(Base:angles():pitch(),0,Base:angles():roll()))*0.5)-ang(-10+JoyX,Yaw,JoyY)*(1-(0.3*Mode)))*75
+Vel=(Base:velL()/5)*!Mode
+if(Vel:x()<45){
+    if(Vel:x()>-45){
+        BaseX=Vel:x()
+    }else{
+        BaseX=-45
+    }
+}else{
+    BaseX=45
+}
+if(Vel:y()<45){
+    if(Vel:y()>-45){
+        BaseY=Vel:y()
+    }else{
+        BaseY=-45
+    }
+}else{
+    BaseY=45
+}
+if(Mode){
+    if(Val2<90){
+        Val2+=10
+    }
+}else{
+    if(Val2>0){
+        Val2-=10
+    }
+}
+holoAng(2,Base:toWorld((ang(BaseX,0,-BaseY)*0.1)+(ang(-JoyX,0,-JoyY)*0.3)))
+holoAng(3,Base:toWorld(ang(-Val2,0,0)))
+
+SlowDown=((Base:right()*(Base:velL():y()*0.15+(Base:vel():length()/200)*0.5))+(Base:up()*(-Base:velL():z()*0.15+(Base:vel():length()/200)*0.5)))
+
+if(Mode){
+Base:applyForce(((SlowDown+(holoEntity(3):up()*Throttle))*Base:mass())*Power)
+}else{
+Base:applyForce((holoEntity(2):up()*Base:mass()*(Throttle*0.75))*Power)
+}
+Base:applyAngForce(((Ang)-(Base:angVel()*50))*(Power*(Base:mass()/24)))
+
+if(dupefinished()){
+    reset()
+}
+if(changed(Power)){
+    if(Power){
+        Base:soundPlay("rotor",0,"npc/manhack/mh_engine_loop1.wav")
+    }else{
+        
+    }
+}
+soundPitch("rotor",15+(RPM/800)*90)
+soundVolume("rotor",-0.2+RPM/1000)
+if(Power){
+    if(RPM<1722){
+        RPM+=(100+randint(-2,2))/20
+    }
+    if(RPM<2348){
+        RPM+=Throttle/150
+    }
+}else{
+    if(RPM>0){
+        RPM-=4
+    }
+    if(RPM<0){
+        RPM=0
+    }
+}
+Val+=RPM/12
+holoAng(1,Base:toWorld(ang(0,0,Val)))
+
+if(Throttle>10){
+    if(RPM>300){
+        foreach(I,E:entity=array(W1,W2,W3)){
+            E:setMass(0)
+        }
+    }else{
+       foreach(I,E:entity=array(W1,W2,W3)){
+            E:setMass(15)
+        }
+    }
+}else{
+    foreach(I,E:entity=array(W1,W2,W3)){
+        E:setMass(15)
+    }
+}
