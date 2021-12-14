@@ -10,7 +10,6 @@ if(first()){
     The base plate must be facing backwards for now.
     ]#
     
-    
     RotorPos=vec(-20,0,25)
     
     holoCreate(1,Rotor:toWorld(vec(0,0,0)),vec(0),Rotor:toWorld(ang(0,0,0)),vec(255),"cube")
